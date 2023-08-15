@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 )
 
 type HandlerFunc func(c *Context)
@@ -67,23 +68,36 @@ func (r *router) Group(name string) *routerGroup {
 
 type Engine struct {
 	router
+	pool sync.Pool
 }
 
 func New() *Engine {
-	return &Engine{}
+	engine := &Engine{router: router{}}
+	engine.pool.New = engine.allocateContext
+	return engine
 }
 
-func (e Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (e *Engine) allocateContext() any {
+	return &Context{engine: e}
+}
+
+func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ctx := e.pool.Get().(*Context)
+	ctx.W = w
+	ctx.R = r
+	e.httpRequestHandle(ctx)
+	e.pool.Put(ctx)
+}
+
+func (e *Engine) httpRequestHandle(ctx *Context) {
+	w := ctx.W
+	r := ctx.R
 	method := r.Method
 	for _, group := range e.router.groups {
-		routerName := SubStringLast(r.RequestURI, "/"+group.name)
+		routerName := SubStringLast(r.URL.Path, "/"+group.name)
 		node := group.tree.Get(routerName)
 		if node != nil && node.isEnd {
 			// any match
-			ctx := &Context{
-				W: w,
-				R: r,
-			}
 			handler, ok := group.handlerMap[node.path]["Any"]
 			if !ok {
 				handler, ok = group.handlerMap[node.path][method]
@@ -100,6 +114,7 @@ func (e Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNotFound)
 	fmt.Fprintf(w, "%s not found", r.RequestURI)
+
 }
 
 func (e *Engine) Run(addr string) {
