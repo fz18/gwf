@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"sync"
+
+	gwfLog "github.com/fz18/gwf/log"
 )
 
 type HandlerFunc func(c *Context)
@@ -54,6 +56,7 @@ func (r *routerGroup) Post(name string, handler HandlerFunc) {
 
 type router struct {
 	groups []*routerGroup
+	engine *Engine
 }
 
 func (r *router) Group(name string) *routerGroup {
@@ -63,18 +66,32 @@ func (r *router) Group(name string) *routerGroup {
 		tree:       &treeNode{name: "/", children: make([]*treeNode, 0)},
 	}
 	r.groups = append(r.groups, group)
+	group.Use(r.engine.middlewares...)
 	return group
 }
 
 type Engine struct {
 	router
-	pool sync.Pool
+	pool        sync.Pool
+	middlewares []MiddleWare
+	Logger      *gwfLog.Logger
 }
 
 func New() *Engine {
 	engine := &Engine{router: router{}}
 	engine.pool.New = engine.allocateContext
 	return engine
+}
+
+func Default() *Engine {
+	engine := New()
+	engine.Logger = gwfLog.Default()
+	engine.router.engine = engine
+	return engine
+}
+
+func (e *Engine) Use(midwares ...MiddleWare) {
+	e.middlewares = append(e.middlewares, midwares...)
 }
 
 func (e *Engine) allocateContext() any {
@@ -85,6 +102,7 @@ func (e *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := e.pool.Get().(*Context)
 	ctx.W = w
 	ctx.R = r
+	ctx.Logger = e.Logger
 	e.httpRequestHandle(ctx)
 	e.pool.Put(ctx)
 }

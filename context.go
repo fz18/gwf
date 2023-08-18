@@ -11,6 +11,10 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+
+	gwfLog "github.com/fz18/gwf/log"
+
+	"github.com/fz18/gwf/render"
 )
 
 const defaultMaxMemory = 32 << 20 // 32M
@@ -19,6 +23,8 @@ type Context struct {
 	R             *http.Request
 	engine        *Engine
 	postFormCache url.Values
+	StatusCode    int
+	Logger        *gwfLog.Logger
 }
 
 func (c *Context) initPostForm() {
@@ -31,21 +37,20 @@ func (c *Context) initPostForm() {
 }
 
 func (c *Context) HTML(code int, html string) error {
-	c.W.WriteHeader(code)
-	c.W.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, err := c.W.Write([]byte(html))
-	return err
+	return c.Rend(code, &render.HTML{Data: html})
 }
 
 func (c *Context) JSON(code int, data any) error {
-	c.W.WriteHeader(code)
-	c.W.Header().Set("Content-Type", "application/json; charset=utf-8")
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	_, err = c.W.Write(jsonData)
-	return err
+	return c.Rend(code, &render.JSON{Data: data})
+}
+
+func (c *Context) Fail(code int, msg string) error {
+	return c.JSON(code, msg)
+}
+
+func (c *Context) Rend(code int, r render.Render) error {
+	c.StatusCode = code
+	return r.Rend(c.W, code)
 }
 
 func (c *Context) QueryMap(key string) map[string]string {

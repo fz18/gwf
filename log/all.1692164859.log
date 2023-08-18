@@ -1,0 +1,3 @@
+[33m [gwf] [0m | 2023-08-16 13:47:40 | [31m ERROR [0m | [31m "error log" [0m map[name:gwf]
+[33m [gwf] [0m | 2023-08-16 13:47:40 | [36m DEBUG [0m | [36m "debug log" [0m map[]
+[33m [gwf] [0m | 2023-08-16 13:47:40 | [32m INFO [0m | [32m "info log" [0m map[]
